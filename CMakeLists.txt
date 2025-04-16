@@ -12,6 +12,7 @@ set(THIS_PACKAGE_INCLUDE_DEPENDS
   moveit_ros_planning_interface
   Eigen3
   tf2
+  tf2_ros
   tf2_eigen
   image_transport
   cv_bridge

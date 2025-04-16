@@ -9,10 +9,16 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include "geometry_msgs/msg/transform_stamped.hpp"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer.h"
 #include <geometric_shapes/shapes.h>
 #include <geometric_shapes/shape_operations.h>
 #include <memory>
 #include <thread>
+
+std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
 
 geometry_msgs::msg::Pose applyRotation(const geometry_msgs::msg::Pose& pose, double roll, double pitch, double yaw)
 {
@@ -28,12 +34,44 @@ geometry_msgs::msg::Pose applyRotation(const geometry_msgs::msg::Pose& pose, dou
   return pose_new;
 }
 
+geometry_msgs::msg::Pose applyTransform(const geometry_msgs::msg::Pose& pose,
+                                        const geometry_msgs::msg::TransformStamped& t)
+{
+  geometry_msgs::msg::PoseStamped pose_in, pose_out;
+  pose_in.pose = pose;
+  pose_in.header.frame_id = t.child_frame_id;
+  tf2::doTransform(pose_in, pose_out, t);
+  return pose_out.pose;
+}
+
+
+bool getTransform(std::string fromFrame, std::string toFrame, geometry_msgs::msg::TransformStamped& t)
+{
+  try 
+  {
+    t = tf_buffer_->lookupTransform(toFrame, fromFrame, tf2::TimePointZero);
+  } 
+  catch (const tf2::TransformException & ex) 
+  {
+    RCLCPP_INFO(rclcpp::get_logger("rclcpp"), "Could not transform %s to %s: %s",
+                toFrame.c_str(), fromFrame.c_str(), ex.what());
+    return false;
+  }
+  return true;
+}
+
 int main(int argc, char ** argv)
 {
   // Initialize ROS and create the Node
   rclcpp::init(argc, argv);
   auto const node = std::make_shared<rclcpp::Node>(
       "move_to_pose", rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
+
+  tf_buffer_ =
+    std::make_unique<tf2_ros::Buffer>(node->get_clock());
+  
+  tf_listener_ =
+    std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   // Create a ROS logger
   auto const logger = rclcpp::get_logger("move_to_pose");
