@@ -41,15 +41,15 @@ geometry_msgs::msg::Pose applyTransform(const geometry_msgs::msg::Pose& pose,
   pose_in.pose = pose;
   pose_in.header.frame_id = t.child_frame_id;
   tf2::doTransform(pose_in, pose_out, t);
+  // std::cout<<"P: "<<pose_out.pose.position.x<<" "<<pose_out.pose.position.y<<" "<<pose_out.pose.position.z<<std::endl;
   return pose_out.pose;
 }
-
 
 bool getTransform(std::string fromFrame, std::string toFrame, geometry_msgs::msg::TransformStamped& t)
 {
   try 
   {
-    t = tf_buffer_->lookupTransform(toFrame, fromFrame, tf2::TimePointZero);
+    t = tf_buffer_->lookupTransform(fromFrame, toFrame, tf2::TimePointZero, tf2::durationFromSec(2.0));
   } 
   catch (const tf2::TransformException & ex) 
   {
@@ -57,7 +57,21 @@ bool getTransform(std::string fromFrame, std::string toFrame, geometry_msgs::msg
                 toFrame.c_str(), fromFrame.c_str(), ex.what());
     return false;
   }
+  // std::cout<<"T: "<<t.transform.translation.x<<" "<<t.transform.translation.y<<" "<<t.transform.translation.z<<std::endl;
   return true;
+}
+
+bool getPose(std::string fromFrame, std::string toFrame, geometry_msgs::msg::Pose& pose)
+{
+  geometry_msgs::msg::TransformStamped t;
+  if (getTransform(fromFrame, toFrame, t))
+  {
+    geometry_msgs::msg::Pose pose_zero;
+    pose_zero.orientation.w = 1.0;
+    pose = applyTransform(pose_zero, t);
+    return true;
+  }
+  return false;
 }
 
 int main(int argc, char ** argv)
@@ -67,11 +81,6 @@ int main(int argc, char ** argv)
   auto const node = std::make_shared<rclcpp::Node>(
       "move_to_pose", rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true));
 
-  tf_buffer_ =
-    std::make_unique<tf2_ros::Buffer>(node->get_clock());
-  
-  tf_listener_ =
-    std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   // Create a ROS logger
   auto const logger = rclcpp::get_logger("move_to_pose");
@@ -81,6 +90,15 @@ int main(int argc, char ** argv)
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(node);
   auto spinner = std::thread([&executor]() { executor.spin(); });
+
+
+  tf_buffer_ =
+    std::make_unique<tf2_ros::Buffer>(node->get_clock());
+  
+  tf_listener_ =
+    std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+
 
   geometry_msgs::msg::Pose target_pose;
 
@@ -102,18 +120,30 @@ int main(int argc, char ** argv)
   // Set the marker action
   marker.action = visualization_msgs::msg::Marker::ADD;
 
-  target_pose.position.x = -0.035;
-  target_pose.position.y = -0.214;
-  target_pose.position.z = 0.353;
-  target_pose.orientation.w = 1.0;
-  target_pose = applyRotation(target_pose,-106.984, -23.960, -172.926);
+  // target_pose.position.x = -0.035;
+  // target_pose.position.y = -0.214;
+  // target_pose.position.z = 0.353;
+  // target_pose.orientation.w = 1.0;
+  // target_pose = applyRotation(target_pose,-106.984, -23.960, -172.926);
+  // getPose("base_link", "aruco", target_pose);
 
-  marker.pose = target_pose;
+
+  geometry_msgs::msg::Pose pose;
+  getPose("gripper", "link6", pose);
+  geometry_msgs::msg::TransformStamped t;
+  getTransform("base_link", "aruco", t);
+  target_pose = applyTransform(pose, t);
+  // std::cout<<"Pose: "<<target_pose.position.x<<" "<<target_pose.position.y<<" "<<target_pose.position.z<<std::endl;
+
+
+  geometry_msgs::msg::Pose pose_marker;
+  getPose("base_link", "aruco", pose_marker);
+  marker.pose = pose_marker;
 
   // Set the scale of the marker
-  marker.scale.x = 0.1;
-  marker.scale.y = 0.1;
-  marker.scale.z = 0.1;
+  marker.scale.x = 0.025;
+  marker.scale.y = 0.025;
+  marker.scale.z = 0.025;
 
   // Set the color
   marker.color.r = 0.0f;
