@@ -131,13 +131,13 @@ int main(int argc, char ** argv)
   geometry_msgs::msg::Pose pose;
   getPose("gripper", "link6", pose);
   geometry_msgs::msg::TransformStamped t;
-  getTransform("base_link", "aruco", t);
+  getTransform("base_link", "target", t);
   target_pose = applyTransform(pose, t);
   // std::cout<<"Pose: "<<target_pose.position.x<<" "<<target_pose.position.y<<" "<<target_pose.position.z<<std::endl;
 
 
   geometry_msgs::msg::Pose pose_marker;
-  getPose("base_link", "aruco", pose_marker);
+  getPose("base_link", "target", pose_marker);
   marker.pose = pose_marker;
 
   // Set the scale of the marker

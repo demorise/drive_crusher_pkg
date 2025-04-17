@@ -10,8 +10,12 @@
 #include "geometry_msgs/msg/transform_stamped.hpp"
 #include "tf2_ros/transform_broadcaster.h"
 #include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <Eigen/Geometry> 
 #include <opencv2/core/eigen.hpp>
+
+
 class ArucoNode {
 public:
   ArucoNode() : node_{ std::make_shared<rclcpp::Node>("aruco_node")}
@@ -24,7 +28,7 @@ public:
         executor_->remove_node(node_);
     });
 
-    std::string camera_topic = "/camera/camera/color/image_raw";
+    std::string camera_topic = "/image_raw";
     std::string output_topic = "/aruco_image";
     marker_size_ = 0.1;
 
@@ -75,14 +79,23 @@ private:
         T.matrix().block<3,1>(0,3) = eigen_trans;
 
         // ROS Stamped transform
-        geometry_msgs::msg::TransformStamped t = tf2::eigenToTransform (T);
-        t.header.stamp = node_->get_clock()->now();
-        t.header.frame_id = "camera";
-        t.child_frame_id = "aruco";//+ std::to_string(i);
+        geometry_msgs::msg::TransformStamped t_aruco = tf2::eigenToTransform (T);
+        t_aruco.header.stamp = node_->get_clock()->now();
+        t_aruco.header.frame_id = "camera";
+        t_aruco.child_frame_id = "aruco";//+ std::to_string(i);
         // std::cout<<T.matrix()<<std::endl;
+        tf_broadcaster_->sendTransform(t_aruco);
 
-        // Send the transformation
-        tf_broadcaster_->sendTransform(t);
+        geometry_msgs::msg::TransformStamped t_target;//applyRotation(t,0, 0, -172.926);
+        tf2::Quaternion q;
+        q.setRPY(180.0*(M_PI/180.0), 0*(M_PI/180.0), 0*(M_PI/180.0));
+        q.normalize();
+        geometry_msgs::msg::Quaternion msg_quat = tf2::toMsg(q);
+        t_target.header.stamp = node_->get_clock()->now();
+        t_target.header.frame_id = "aruco";
+        t_target.child_frame_id = "target";//+ std::to_string(i);
+        t_target.transform.rotation = msg_quat;
+        tf_broadcaster_->sendTransform(t_target);
     };
 
     void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& msg) 
